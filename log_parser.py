@@ -365,6 +365,7 @@ def filter_lines_by_keywords(lines: list[str], keyword_expr: str, fmt: str = "un
     return result
 
 
+
 def format_stats_summary(stats: LogStats) -> str:
     """将统计信息格式化为可读的文本摘要。"""
     parts = [

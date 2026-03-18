@@ -5,7 +5,7 @@ import uuid
 from pathlib import Path
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request
 
 from agents import get_available_providers, run_analysis
 from log_parser import count_levels, filter_lines_by_time, filter_lines_by_keywords, parse_log_file
@@ -113,14 +113,14 @@ def filter_log():
 
 @app.route("/logs", methods=["POST"])
 def get_logs():
-    """返回过滤后的完整日志（分页）。"""
+    """返回过滤后的日志，page_size 为 0 时返回全部。"""
     data = request.get_json(silent=True) or {}
     file_id = data.get("file_id")
     time_start = data.get("time_start")
     time_end = data.get("time_end")
     keyword_expr = data.get("keyword_expr", "")
     page = data.get("page", 1)
-    page_size = data.get("page_size", 500)
+    page_size = data.get("page_size", 0)
 
     if not file_id or file_id not in _uploads:
         return jsonify({"error": "无效的文件 ID"}), 400
@@ -133,17 +133,52 @@ def get_logs():
     filtered = filter_lines_by_keywords(filtered, keyword_expr, fmt=stats.detected_format)
 
     total = len(filtered)
-    start = (page - 1) * page_size
-    end = start + page_size
-    page_lines = filtered[start:end]
+
+    if page_size > 0:
+        start = (page - 1) * page_size
+        page_lines = filtered[start:start + page_size]
+    else:
+        page_lines = filtered
 
     return jsonify({
         "total": total,
-        "page": page,
-        "page_size": page_size,
-        "total_pages": (total + page_size - 1) // page_size if total > 0 else 1,
         "lines": page_lines,
     })
+
+
+@app.route("/export", methods=["POST"])
+def export_logs():
+    """导出过滤后的日志为文本文件下载。"""
+    data = request.get_json(silent=True) or {}
+    file_id = data.get("file_id")
+    time_start = data.get("time_start")
+    time_end = data.get("time_end")
+    keyword_expr = data.get("keyword_expr", "")
+
+    if not file_id or file_id not in _uploads:
+        return jsonify({"error": "无效的文件 ID"}), 400
+
+    upload_info = _uploads[file_id]
+    stats = upload_info["stats"]
+    all_lines = upload_info["lines"]
+
+    filtered = filter_lines_by_time(all_lines, stats.detected_format, time_start, time_end)
+    filtered = filter_lines_by_keywords(filtered, keyword_expr, fmt=stats.detected_format)
+
+    if not filtered:
+        return jsonify({"error": "过滤后没有日志内容，无法导出"}), 400
+
+    # 用原始文件名生成导出文件名
+    original_name = upload_info.get("original_name", "log")
+    stem = Path(original_name).stem
+    export_name = f"{stem}_filtered.log"
+
+    content = "\n".join(filtered)
+    return Response(
+        content,
+        mimetype="text/plain; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{export_name}"'},
+    )
 
 
 @app.route("/analyze", methods=["POST"])

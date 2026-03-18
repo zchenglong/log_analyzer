@@ -9,7 +9,8 @@
       "Bash(/opt/homebrew/bin/python3.12:*)",
       "Bash(source:*)",
       "Bash(python:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "mcp__ide__getDiagnostics"
     ]
   }
 }

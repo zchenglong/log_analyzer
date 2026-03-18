@@ -27,7 +27,7 @@ body {
 }
 
 .log-viewer {
-    max-height: 600px;
+    max-height: 85vh;
     overflow: auto;
     font-size: 0.78rem;
     line-height: 1.45;

@@ -21,13 +21,12 @@
     const keywordBar = document.getElementById("keyword-bar");
     const matchCount = document.getElementById("keyword-match-count");
     const logViewer = document.getElementById("log-viewer");
-    const logPager = document.getElementById("log-pager");
+    const logTotalInfo = document.getElementById("log-total-info");
+    const btnExport = document.getElementById("btn-export");
 
     let currentFileId = null;
     let rawTimeStart = null;
     let rawTimeEnd = null;
-    let currentPage = 1;
-    let totalPages = 1;
 
     // 关键字数据: [{keyword: "ERROR", op: "OR"}, ...] op 是该关键字与前一个的连接符
     let kwItems = [];
@@ -68,7 +67,6 @@
         currentFileId = null;
         rawTimeStart = null;
         rawTimeEnd = null;
-        currentPage = 1;
         kwItems = [];
         hide(fileInfoSection);
         hide(loadingSection);
@@ -80,7 +78,7 @@
         keywordInput.value = "";
         hide(matchCount);
         logViewer.innerHTML = "";
-        hide(logPager);
+        logTotalInfo.textContent = "";
         renderBubbles();
     }
 
@@ -305,7 +303,7 @@
             renderBubbles();
             syncExpr();
             displayFileInfo(data);
-            loadLogs(1);
+            loadLogs();
         } catch (err) {
             showError("上传请求失败: " + err.message);
         }
@@ -396,20 +394,20 @@
                 hide(matchCount);
             }
 
-            loadLogs(1);
+            loadLogs();
         } catch (err) {
             showError("过滤请求失败: " + err.message);
         }
     }
 
-    // ---- 日志查看器 (分页) ----
+    // ---- 日志查看器 ----
 
-    async function loadLogs(page) {
+    async function loadLogs() {
         if (!currentFileId) return;
 
         const params = getFilterParams();
-        params.page = page;
-        params.page_size = 500;
+        params.page = 1;
+        params.page_size = 0; // 不分页，后端返回全部
 
         try {
             const resp = await fetch("/logs", {
@@ -420,21 +418,8 @@
             const data = await resp.json();
             if (!resp.ok) return;
 
-            currentPage = data.page;
-            totalPages = data.total_pages;
-
             renderLogLines(data.lines);
-
-            if (totalPages > 1) {
-                show(logPager);
-                document.getElementById("page-info").textContent =
-                    `第 ${currentPage} / ${totalPages} 页 (共 ${data.total} 行)`;
-                document.getElementById("btn-page-prev").disabled = (currentPage <= 1);
-                document.getElementById("btn-page-next").disabled = (currentPage >= totalPages);
-            } else {
-                hide(logPager);
-            }
-
+            logTotalInfo.textContent = `共 ${data.total} 行`;
             logViewer.scrollTop = 0;
         } catch (_) {
             // ignore
@@ -501,13 +486,51 @@
         }
     }
 
-    document.getElementById("btn-page-prev").addEventListener("click", () => {
-        if (currentPage > 1) loadLogs(currentPage - 1);
-    });
+    // ---- 导出过滤后的日志 ----
 
-    document.getElementById("btn-page-next").addEventListener("click", () => {
-        if (currentPage < totalPages) loadLogs(currentPage + 1);
-    });
+    btnExport.addEventListener("click", exportLogs);
+
+    async function exportLogs() {
+        if (!currentFileId) return;
+        hideError();
+
+        btnExport.disabled = true;
+        btnExport.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 导出中...';
+
+        try {
+            const resp = await fetch("/export", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(getFilterParams()),
+            });
+
+            if (!resp.ok) {
+                const data = await resp.json();
+                showError(data.error || "导出失败");
+                return;
+            }
+
+            // 从 Content-Disposition 获取文件名
+            const disposition = resp.headers.get("Content-Disposition") || "";
+            const match = disposition.match(/filename="?([^"]+)"?/);
+            const filename = match ? match[1] : "filtered.log";
+
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            showError("导出请求失败: " + err.message);
+        } finally {
+            btnExport.disabled = false;
+            btnExport.innerHTML = '<i class="bi bi-download"></i> 导出';
+        }
+    }
 
     // ---- 开始分析 ----
 

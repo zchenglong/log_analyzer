@@ -119,6 +119,15 @@
                             </div>
                             <span class="small text-muted" id="log-total-info"></span>
                         </div>
+                        <!-- 高亮关键字 -->
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="text-nowrap small"><i class="bi bi-highlighter"></i> 高亮:</span>
+                            <div id="hl-bar" class="hl-bar form-control form-control-sm d-flex flex-wrap align-items-center gap-1">
+                                <span id="hl-bubbles"></span>
+                                <input type="text" id="hl-input" class="hl-input" placeholder="输入关键字后回车高亮...">
+                            </div>
+                            <button id="btn-hl-clear" class="btn btn-sm btn-outline-secondary text-nowrap" type="button">清除</button>
+                        </div>
                         <pre id="log-viewer" class="log-viewer border rounded p-2 bg-light"></pre>
                     </div>
                 </div>

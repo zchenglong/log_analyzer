@@ -23,6 +23,9 @@
     const logViewer = document.getElementById("log-viewer");
     const logTotalInfo = document.getElementById("log-total-info");
     const btnExport = document.getElementById("btn-export");
+    const hlInput = document.getElementById("hl-input");
+    const hlBubbles = document.getElementById("hl-bubbles");
+    const hlBar = document.getElementById("hl-bar");
 
     let currentFileId = null;
     let rawTimeStart = null;
@@ -30,6 +33,15 @@
 
     // 关键字数据: [{keyword: "ERROR", op: "OR"}, ...] op 是该关键字与前一个的连接符
     let kwItems = [];
+
+    // 高亮关键字列表（独立于过滤，仅做高亮）
+    let hlItems = [];
+
+    // 多色高亮调色板
+    const HL_COLORS = [
+        "#fff3cd", "#d1ecf1", "#d4edda", "#f8d7da", "#e2d9f3",
+        "#fde2c8", "#cce5ff", "#f5c6cb", "#c3e6cb", "#d6d8db",
+    ];
 
     // ---- 加载模型列表 ----
 
@@ -68,6 +80,7 @@
         rawTimeStart = null;
         rawTimeEnd = null;
         kwItems = [];
+        hlItems = [];
         hide(fileInfoSection);
         hide(loadingSection);
         hide(resultSection);
@@ -80,6 +93,7 @@
         logViewer.innerHTML = "";
         logTotalInfo.textContent = "";
         renderBubbles();
+        renderHlBubbles();
     }
 
     // ---- 表达式生成 ----
@@ -113,7 +127,11 @@
     }
 
     function getHighlightKeywords() {
-        return kwItems.map(item => item.keyword.toLowerCase());
+        // 合并过滤关键字 + 高亮关键字，去重
+        const set = new Set();
+        kwItems.forEach(item => set.add(item.keyword.toLowerCase()));
+        hlItems.forEach(kw => set.add(kw.toLowerCase()));
+        return Array.from(set);
     }
 
     // ---- 气泡渲染 ----
@@ -243,6 +261,69 @@
         });
     }
 
+    // ---- 高亮关键字（独立于过滤） ----
+
+    function renderHlBubbles() {
+        hlBubbles.innerHTML = "";
+        hlItems.forEach((kw, i) => {
+            const bubble = document.createElement("span");
+            bubble.className = "hl-bubble";
+            bubble.style.backgroundColor = HL_COLORS[i % HL_COLORS.length];
+            bubble.innerHTML = escapeHtml(kw) +
+                ' <button class="hl-remove" title="移除">&times;</button>';
+            bubble.querySelector(".hl-remove").addEventListener("click", () => {
+                hlItems.splice(i, 1);
+                renderHlBubbles();
+                reHighlight();
+            });
+            hlBubbles.appendChild(bubble);
+        });
+    }
+
+    function addHlKeyword(kw) {
+        kw = kw.trim();
+        if (!kw) return;
+        if (hlItems.some(item => item.toLowerCase() === kw.toLowerCase())) return;
+        hlItems.push(kw);
+        renderHlBubbles();
+        reHighlight();
+    }
+
+    /** 只刷新高亮，不重新请求日志 */
+    function reHighlight() {
+        // 把当前 logViewer 里已有的纯文本重新渲染
+        const text = logViewer.textContent;
+        if (!text) return;
+        const lines = text.split("\n");
+        renderLogLines(lines);
+    }
+
+    hlInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            addHlKeyword(hlInput.value);
+            hlInput.value = "";
+        }
+        if (e.key === "Backspace" && hlInput.value === "" && hlItems.length > 0) {
+            hlItems.pop();
+            renderHlBubbles();
+            reHighlight();
+        }
+    });
+
+    hlBar.addEventListener("click", (e) => {
+        if (e.target === hlBar || e.target === hlBubbles) {
+            hlInput.focus();
+        }
+    });
+
+    document.getElementById("btn-hl-clear").addEventListener("click", () => {
+        hlItems = [];
+        hlInput.value = "";
+        renderHlBubbles();
+        reHighlight();
+    });
+
     // ---- 防抖过滤 ----
 
     let _filterTimer = null;
@@ -298,9 +379,12 @@
 
             currentFileId = data.file_id;
             kwItems = [];
+            hlItems = [];
             keywordInput.value = "";
+            hlInput.value = "";
             hide(matchCount);
             renderBubbles();
+            renderHlBubbles();
             syncExpr();
             displayFileInfo(data);
             loadLogs();
@@ -445,11 +529,12 @@
 
     function appendHighlightedLine(parent, line, kws) {
         const lineLower = line.toLowerCase();
+        // 为每个匹配记录 [start, end, kwIndex] 以支持多色
         const ranges = [];
-        kws.forEach(kw => {
+        kws.forEach((kw, ki) => {
             let idx = 0;
             while ((idx = lineLower.indexOf(kw, idx)) !== -1) {
-                ranges.push([idx, idx + kw.length]);
+                ranges.push([idx, idx + kw.length, ki]);
                 idx += kw.length;
             }
         });
@@ -459,24 +544,32 @@
             return;
         }
 
+        // 按位置排序，重叠区间合并（保留最先匹配的颜色索引）
         ranges.sort((a, b) => a[0] - b[0]);
-        const merged = [ranges[0]];
+        const merged = [[ranges[0][0], ranges[0][1], ranges[0][2]]];
         for (let i = 1; i < ranges.length; i++) {
             const last = merged[merged.length - 1];
             if (ranges[i][0] <= last[1]) {
                 last[1] = Math.max(last[1], ranges[i][1]);
             } else {
-                merged.push(ranges[i]);
+                merged.push([ranges[i][0], ranges[i][1], ranges[i][2]]);
             }
         }
 
+        // 构建颜色映射：合并过滤关键字和高亮关键字，为每个分配颜色
+        const colorMap = {};
+        kws.forEach((kw, ki) => {
+            colorMap[ki] = HL_COLORS[ki % HL_COLORS.length];
+        });
+
         let pos = 0;
-        merged.forEach(([start, end]) => {
+        merged.forEach(([start, end, ki]) => {
             if (pos < start) {
                 parent.appendChild(document.createTextNode(line.slice(pos, start)));
             }
             const mark = document.createElement("mark");
             mark.className = "highlight";
+            mark.style.backgroundColor = colorMap[ki] || HL_COLORS[0];
             mark.textContent = line.slice(start, end);
             parent.appendChild(mark);
             pos = end;

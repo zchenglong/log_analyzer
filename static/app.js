@@ -297,10 +297,13 @@
 
     /** 只刷新高亮，不重新请求日志 */
     function reHighlight() {
-        // 把当前 logViewer 里已有的纯文本重新渲染
-        const text = logViewer.textContent;
-        if (!text) return;
-        const lines = text.split("\n");
+        // 从表格的内容列提取纯文本，避免混入行号
+        const rows = logViewer.querySelectorAll("tbody tr");
+        if (rows.length === 0) return;
+        const lines = Array.from(rows).map(tr => {
+            const td = tr.querySelector(".line-content");
+            return td ? td.textContent : "";
+        });
         renderLogLines(lines);
     }
 
@@ -375,7 +378,7 @@
         formData.append("file", file);
 
         try {
-            const resp = await fetch(api("/upload", { method: "POST", body: formData });
+            const resp = await fetch(api("/upload"), { method: "POST", body: formData });
             const data = await resp.json();
 
             if (!resp.ok) {
@@ -459,7 +462,7 @@
         hideError();
 
         try {
-            const resp = await fetch(api("/filter", {
+            const resp = await fetch(api("/filter"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(getFilterParams()),
@@ -500,7 +503,7 @@
         params.page_size = 0; // 不分页，后端返回全部
 
         try {
-            const resp = await fetch(api("/logs", {
+            const resp = await fetch(api("/logs"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(params),
@@ -519,18 +522,34 @@
     function renderLogLines(lines) {
         const kws = getHighlightKeywords();
 
-        if (kws.length === 0) {
-            logViewer.textContent = lines.join("\n");
-            return;
-        }
+        const table = document.createElement("table");
+        const tbody = document.createElement("tbody");
 
-        const fragment = document.createDocumentFragment();
         lines.forEach((line, i) => {
-            if (i > 0) fragment.appendChild(document.createTextNode("\n"));
-            appendHighlightedLine(fragment, line, kws);
+            const tr = document.createElement("tr");
+
+            // 行号单元格
+            const tdNo = document.createElement("td");
+            tdNo.className = "line-no";
+            tdNo.textContent = i + 1;
+            tr.appendChild(tdNo);
+
+            // 内容单元格
+            const tdContent = document.createElement("td");
+            tdContent.className = "line-content";
+            if (kws.length === 0) {
+                tdContent.textContent = line;
+            } else {
+                appendHighlightedLine(tdContent, line, kws);
+            }
+            tr.appendChild(tdContent);
+
+            tbody.appendChild(tr);
         });
+
+        table.appendChild(tbody);
         logViewer.innerHTML = "";
-        logViewer.appendChild(fragment);
+        logViewer.appendChild(table);
     }
 
     function appendHighlightedLine(parent, line, kws) {
@@ -597,7 +616,7 @@
         btnExport.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 导出中...';
 
         try {
-            const resp = await fetch(api("/export", {
+            const resp = await fetch(api("/export"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(getFilterParams()),
@@ -647,7 +666,7 @@
         params.provider = modelSelect.value;
 
         try {
-            const resp = await fetch(api("/analyze", {
+            const resp = await fetch(api("/analyze"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(params),

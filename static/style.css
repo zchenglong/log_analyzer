@@ -34,6 +34,35 @@ body {
     white-space: pre-wrap;
     word-break: break-all;
     font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    padding: 0 !important;
+}
+
+.log-viewer table {
+    width: 100%;
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+.log-viewer .line-no {
+    width: 1px;
+    min-width: fit-content;
+    padding: 0 8px;
+    text-align: right;
+    color: #999;
+    background-color: #f0f0f0;
+    border-right: 1px solid #ddd;
+    user-select: none;
+    -webkit-user-select: none;
+    white-space: nowrap;
+    vertical-align: top;
+    position: sticky;
+    left: 0;
+}
+
+.log-viewer .line-content {
+    padding: 0 8px;
+    white-space: pre-wrap;
+    word-break: break-all;
 }
 
 .log-viewer .highlight {

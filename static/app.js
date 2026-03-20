@@ -3,6 +3,12 @@
 (function () {
     "use strict";
 
+    const API_BASE = "";
+
+    function api(path) {
+        return API_BASE + path;
+    }
+
     // DOM 元素
     const dropZone = document.getElementById("drop-zone");
     const fileInput = document.getElementById("file-input");
@@ -47,7 +53,7 @@
 
     (async function loadProviders() {
         try {
-            const resp = await fetch("/providers");
+            const resp = await fetch(api("/providers"));
             const providers = await resp.json();
             providers.forEach((p) => {
                 const opt = document.createElement("option");
@@ -369,7 +375,7 @@
         formData.append("file", file);
 
         try {
-            const resp = await fetch("/upload", { method: "POST", body: formData });
+            const resp = await fetch(api("/upload", { method: "POST", body: formData });
             const data = await resp.json();
 
             if (!resp.ok) {
@@ -453,7 +459,7 @@
         hideError();
 
         try {
-            const resp = await fetch("/filter", {
+            const resp = await fetch(api("/filter", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(getFilterParams()),
@@ -494,7 +500,7 @@
         params.page_size = 0; // 不分页，后端返回全部
 
         try {
-            const resp = await fetch("/logs", {
+            const resp = await fetch(api("/logs", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(params),
@@ -591,7 +597,7 @@
         btnExport.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 导出中...';
 
         try {
-            const resp = await fetch("/export", {
+            const resp = await fetch(api("/export", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(getFilterParams()),
@@ -641,7 +647,7 @@
         params.provider = modelSelect.value;
 
         try {
-            const resp = await fetch("/analyze", {
+            const resp = await fetch(api("/analyze", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(params),

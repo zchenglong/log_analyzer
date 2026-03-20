@@ -6,13 +6,20 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from flask import Flask, Response, jsonify, render_template, request
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from agents import get_available_providers, run_analysis
-from log_parser import count_levels, filter_lines_by_time, filter_lines_by_keywords, parse_log_file
+from log_parser import (
+    count_levels,
+    filter_lines_by_time,
+    filter_lines_by_keywords,
+    parse_log_file,
+)
 
 load_dotenv(Path(__file__).parent / ".env")
 
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_prefix=1)
 
 UPLOAD_DIR = Path(__file__).parent / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
@@ -49,7 +56,9 @@ def upload():
         return jsonify({"error": "文件名为空"}), 400
 
     if not _allowed_file(file.filename):
-        return jsonify({"error": f"不支持的文件格式，仅支持 {', '.join(ALLOWED_EXTENSIONS)}"}), 400
+        return jsonify(
+            {"error": f"不支持的文件格式，仅支持 {', '.join(ALLOWED_EXTENSIONS)}"}
+        ), 400
 
     file_id = uuid.uuid4().hex[:12]
     ext = Path(file.filename).suffix
@@ -67,20 +76,23 @@ def upload():
         "lines": lines,
     }
 
-    return jsonify({
-        "file_id": file_id,
-        "filename": file.filename,
-        "total_lines": stats.total_lines,
-        "detected_format": stats.detected_format,
-        "time_range_start": stats.time_range_start,
-        "time_range_end": stats.time_range_end,
-        "time_range": (
-            f"{stats.time_range_start} → {stats.time_range_end}"
-            if stats.time_range_start else "未检测到"
-        ),
-        "level_counts": stats.level_counts,
-        "preview": stats.sample_lines,
-    })
+    return jsonify(
+        {
+            "file_id": file_id,
+            "filename": file.filename,
+            "total_lines": stats.total_lines,
+            "detected_format": stats.detected_format,
+            "time_range_start": stats.time_range_start,
+            "time_range_end": stats.time_range_end,
+            "time_range": (
+                f"{stats.time_range_start} → {stats.time_range_end}"
+                if stats.time_range_start
+                else "未检测到"
+            ),
+            "level_counts": stats.level_counts,
+            "preview": stats.sample_lines,
+        }
+    )
 
 
 @app.route("/filter", methods=["POST"])
@@ -99,16 +111,22 @@ def filter_log():
     stats = upload_info["stats"]
     all_lines = upload_info["lines"]
 
-    filtered = filter_lines_by_time(all_lines, stats.detected_format, time_start, time_end)
-    filtered = filter_lines_by_keywords(filtered, keyword_expr, fmt=stats.detected_format)
+    filtered = filter_lines_by_time(
+        all_lines, stats.detected_format, time_start, time_end
+    )
+    filtered = filter_lines_by_keywords(
+        filtered, keyword_expr, fmt=stats.detected_format
+    )
     non_empty = [l for l in filtered if l.strip()]
 
-    return jsonify({
-        "total_lines": len(filtered),
-        "non_empty_lines": len(non_empty),
-        "level_counts": count_levels(non_empty),
-        "preview": filtered[:20],
-    })
+    return jsonify(
+        {
+            "total_lines": len(filtered),
+            "non_empty_lines": len(non_empty),
+            "level_counts": count_levels(non_empty),
+            "preview": filtered[:20],
+        }
+    )
 
 
 @app.route("/logs", methods=["POST"])
@@ -129,21 +147,27 @@ def get_logs():
     stats = upload_info["stats"]
     all_lines = upload_info["lines"]
 
-    filtered = filter_lines_by_time(all_lines, stats.detected_format, time_start, time_end)
-    filtered = filter_lines_by_keywords(filtered, keyword_expr, fmt=stats.detected_format)
+    filtered = filter_lines_by_time(
+        all_lines, stats.detected_format, time_start, time_end
+    )
+    filtered = filter_lines_by_keywords(
+        filtered, keyword_expr, fmt=stats.detected_format
+    )
 
     total = len(filtered)
 
     if page_size > 0:
         start = (page - 1) * page_size
-        page_lines = filtered[start:start + page_size]
+        page_lines = filtered[start : start + page_size]
     else:
         page_lines = filtered
 
-    return jsonify({
-        "total": total,
-        "lines": page_lines,
-    })
+    return jsonify(
+        {
+            "total": total,
+            "lines": page_lines,
+        }
+    )
 
 
 @app.route("/export", methods=["POST"])
@@ -162,8 +186,12 @@ def export_logs():
     stats = upload_info["stats"]
     all_lines = upload_info["lines"]
 
-    filtered = filter_lines_by_time(all_lines, stats.detected_format, time_start, time_end)
-    filtered = filter_lines_by_keywords(filtered, keyword_expr, fmt=stats.detected_format)
+    filtered = filter_lines_by_time(
+        all_lines, stats.detected_format, time_start, time_end
+    )
+    filtered = filter_lines_by_keywords(
+        filtered, keyword_expr, fmt=stats.detected_format
+    )
 
     if not filtered:
         return jsonify({"error": "过滤后没有日志内容，无法导出"}), 400

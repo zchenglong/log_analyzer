@@ -5,6 +5,7 @@ import os
 from crewai import Agent, Crew, LLM, Process, Task
 
 from log_parser import LogStats, chunk_lines, format_stats_summary
+from knot_client import analyze_with_knot
 
 from pathlib import Path
 from dotenv import load_dotenv
@@ -49,6 +50,7 @@ def _build_llm(provider: str | None = None) -> LLM:
 def get_available_providers() -> list[dict[str, str]]:
     """返回可用的模型提供商列表 (供前端下拉框使用)。"""
     return [
+        {"id": "knot", "name": "Knot 智能体"},
         {"id": "dashscope", "name": "阿里千问 (Qwen-Plus)"},
         {"id": "hunyuan", "name": "腾讯混元 (Hunyuan-Turbo)"},
     ]
@@ -203,4 +205,35 @@ def run_analysis(stats: LogStats, lines: list[str], provider: str | None = None)
         "log_parsing": task_outputs[0].raw if len(task_outputs) > 0 else "",
         "user_behavior": task_outputs[1].raw if len(task_outputs) > 1 else "",
         "issue_diagnosis": task_outputs[2].raw if len(task_outputs) > 2 else "",
+    }
+
+
+def run_knot_analysis(stats: LogStats, lines: list[str]) -> dict[str, str]:
+    """
+    使用 Knot 智能体执行日志分析。
+
+    Knot 一次性返回完整报告，放入 log_parsing 字段。
+
+    Returns:
+        与 run_analysis 相同结构的 dict[str, str]
+    """
+    # 准备日志内容
+    chunks = chunk_lines(lines)
+    if len(chunks) == 1:
+        log_content = chunks[0]
+    else:
+        parts = chunks[:2]
+        if len(chunks) > 2:
+            parts.append(chunks[-1])
+        log_content = "\n...(中间部分省略)...\n".join(parts)
+
+    stats_summary = format_stats_summary(stats)
+
+    # 调用 Knot 智能体
+    report = analyze_with_knot(stats_summary, log_content)
+
+    return {
+        "log_parsing": report,
+        "user_behavior": "",
+        "issue_diagnosis": "",
     }

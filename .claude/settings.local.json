@@ -10,7 +10,10 @@
       "Bash(source:*)",
       "Bash(python:*)",
       "Bash(python3:*)",
-      "mcp__ide__getDiagnostics"
+      "mcp__ide__getDiagnostics",
+      "WebFetch(domain:knot.woa.com)",
+      "WebFetch(domain:doc.weixin.qq.com)",
+      "Bash(curl:*)"
     ]
   }
 }

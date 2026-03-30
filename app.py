@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from flask import Flask, Response, jsonify, render_template, request
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from agents import get_available_providers, run_analysis
+from agents import get_available_providers, run_analysis, run_knot_analysis
 from log_parser import (
     count_levels,
     filter_lines_by_time,
@@ -233,7 +233,10 @@ def analyze():
         return jsonify({"error": "过滤后没有日志内容，请调整过滤条件"}), 400
 
     try:
-        results = run_analysis(stats, lines, provider=provider)
+        if provider == "knot":
+            results = run_knot_analysis(stats, lines)
+        else:
+            results = run_analysis(stats, lines, provider=provider)
     except RuntimeError as e:
         return jsonify({"error": str(e)}), 500
     except Exception as e:
